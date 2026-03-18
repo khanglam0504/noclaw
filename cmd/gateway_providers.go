@@ -29,10 +29,15 @@ func loopbackAddr(host string, port int) string {
 }
 
 func registerProviders(registry *providers.Registry, cfg *config.Config) {
-	if cfg.Providers.Anthropic.APIKey != "" {
+	// Anthropic provider supports both API key and OAuth token modes
+	if cfg.Providers.Anthropic.Mode == "token" {
+		// OAuth token mode - provider will be registered from DB when OAuth is configured
+		slog.Info("anthropic configured for OAuth token mode - will be registered from DB")
+	} else if cfg.Providers.Anthropic.APIKey != "" {
+		// API key mode (default)
 		registry.Register(providers.NewAnthropicProvider(cfg.Providers.Anthropic.APIKey,
 			providers.WithAnthropicBaseURL(cfg.Providers.Anthropic.APIBase)))
-		slog.Info("registered provider", "name", "anthropic")
+		slog.Info("registered provider", "name", "anthropic", "mode", "api_key")
 	}
 
 	if cfg.Providers.OpenAI.APIKey != "" {
@@ -291,6 +296,10 @@ func registerProvidersFromDB(registry *providers.Registry, provStore store.Provi
 		case store.ProviderChatGPTOAuth:
 			ts := oauth.NewDBTokenSource(provStore, secretStore, p.Name)
 			registry.Register(providers.NewCodexProvider(p.Name, ts, p.APIBase, ""))
+		case store.ProviderAnthropicOAuth:
+			ts := oauth.NewAnthropicDBTokenSource(provStore, secretStore, p.Name)
+			registry.Register(providers.NewAnthropicProviderWithToken(ts,
+				providers.WithAnthropicBaseURL(p.APIBase)))
 		case store.ProviderAnthropicNative:
 			registry.Register(providers.NewAnthropicProvider(p.APIKey,
 				providers.WithAnthropicBaseURL(p.APIBase)))
@@ -366,7 +375,7 @@ func registerACPFromConfig(registry *providers.Registry, cfg config.ACPConfig) {
 		opts = append(opts, providers.WithACPPermMode(cfg.PermMode))
 	}
 	registry.Register(providers.NewACPProvider(
-		cfg.Binary, cfg.Args, workDir, idleTTL, tools.DefaultDenyPatterns(), opts...,
+		cfg.Binary, cfg.Args, workDir, idleTTL, tools.DefaultDenyPatterns, opts...,
 	))
 	slog.Info("registered provider", "name", "acp", "binary", cfg.Binary)
 }
@@ -409,7 +418,7 @@ func registerACPFromDB(registry *providers.Registry, p store.LLMProviderData) {
 		workDir = defaultACPWorkDir()
 	}
 	registry.Register(providers.NewACPProvider(
-		binary, settings.Args, workDir, idleTTL, tools.DefaultDenyPatterns(),
+		binary, settings.Args, workDir, idleTTL, tools.DefaultDenyPatterns,
 		providers.WithACPModel(p.Name),
 	))
 	slog.Info("registered provider from DB", "name", p.Name, "type", "acp")

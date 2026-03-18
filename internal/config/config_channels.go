@@ -233,6 +233,7 @@ type ACPConfig struct {
 type ProviderConfig struct {
 	APIKey  string `json:"api_key"`
 	APIBase string `json:"api_base,omitempty"`
+	Mode    string `json:"mode,omitempty"` // "api_key" (default) or "token" for OAuth
 }
 
 // HasAnyProvider returns true if at least one provider has an API key or CLI configured.

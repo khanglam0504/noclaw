@@ -10,6 +10,7 @@ import (
 // Provider type constants.
 const (
 	ProviderAnthropicNative = "anthropic_native"
+	ProviderAnthropicOAuth  = "anthropic_oauth"
 	ProviderOpenAICompat    = "openai_compat"
 	ProviderGeminiNative    = "gemini_native"
 	ProviderOpenRouter      = "openrouter"
@@ -36,6 +37,7 @@ const (
 // ValidProviderTypes lists all accepted provider_type values.
 var ValidProviderTypes = map[string]bool{
 	ProviderAnthropicNative: true,
+	ProviderAnthropicOAuth:  true,
 	ProviderOpenAICompat:    true,
 	ProviderGeminiNative:    true,
 	ProviderOpenRouter:      true,

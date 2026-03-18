@@ -39,17 +39,35 @@ func resolveAnthropicModel(model, defaultModel string) string {
 
 // AnthropicProvider implements Provider using the Anthropic Claude API via net/http.
 type AnthropicProvider struct {
-	apiKey       string
+	apiKey       string // Used when tokenSource is nil (API key mode)
+	tokenSource  TokenSource // Used for OAuth token mode (optional)
 	baseURL      string
 	defaultModel string
 	client       *http.Client
 	retryConfig  RetryConfig
 }
 
-// NewAnthropicProvider creates a new Anthropic provider.
+// NewAnthropicProvider creates a new Anthropic provider with API key authentication.
 func NewAnthropicProvider(apiKey string, opts ...AnthropicOption) *AnthropicProvider {
 	p := &AnthropicProvider{
 		apiKey:       apiKey,
+		tokenSource:  nil, // API key mode
+		baseURL:      anthropicAPIBase,
+		defaultModel: defaultClaudeModel,
+		client:       &http.Client{Timeout: 300 * time.Second},
+		retryConfig:  DefaultRetryConfig(),
+	}
+	for _, o := range opts {
+		o(p)
+	}
+	return p
+}
+
+// NewAnthropicProviderWithToken creates a new Anthropic provider with OAuth token authentication.
+func NewAnthropicProviderWithToken(tokenSource TokenSource, opts ...AnthropicOption) *AnthropicProvider {
+	p := &AnthropicProvider{
+		apiKey:       "", // Token mode, no API key needed
+		tokenSource:  tokenSource,
 		baseURL:      anthropicAPIBase,
 		defaultModel: defaultClaudeModel,
 		client:       &http.Client{Timeout: 300 * time.Second},
@@ -112,8 +130,18 @@ func (p *AnthropicProvider) doRequest(ctx context.Context, body any) (io.ReadClo
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", p.apiKey)
 	httpReq.Header.Set("anthropic-version", anthropicAPIVersion)
+
+	// Use OAuth token if available, otherwise fall back to API key
+	if p.tokenSource != nil {
+		token, err := p.tokenSource.Token()
+		if err != nil {
+			return nil, fmt.Errorf("anthropic: get auth token: %w", err)
+		}
+		httpReq.Header.Set("Authorization", "Bearer "+token)
+	} else {
+		httpReq.Header.Set("x-api-key", p.apiKey)
+	}
 
 	// Add beta header for interleaved thinking when thinking is enabled
 	if bodyMap, ok := body.(map[string]any); ok {
